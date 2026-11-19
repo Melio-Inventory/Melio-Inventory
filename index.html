@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>QR Inventory</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f4; --card:#ffffff; --ink:#1b1f1d; --muted:#6b736f; --line:#e2e5e1;
+    --accent:#0f766e; --accent-ink:#ffffff; --accent-soft:#e3f2ef;
+    --warn:#b45309; --warn-soft:#fdf1e2; --danger:#b42318; --danger-soft:#fdecea;
+    --radius:14px; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#121513; --card:#1b1f1d; --ink:#eef1ef; --muted:#9aa39e; --line:#2b312e;
+      --accent:#2dd4bf; --accent-ink:#06201c; --accent-soft:#163430;
+      --warn:#f59e0b; --warn-soft:#33270f; --danger:#f87171; --danger-soft:#3a1a18;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-tap-highlight-color:transparent}
+  body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(76px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px;max-width:720px;margin:0 auto}
+  header h1{font-size:20px;margin:0;letter-spacing:-.01em}
+  .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+  .pill.local{background:var(--warn-soft);color:var(--warn)}
+  main{max-width:720px;margin:0 auto;padding:8px 16px 16px}
+  .view{display:none}.view.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:14px}
+  h2{font-size:15px;margin:0 0 10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    border-radius:12px;padding:11px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+  button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  button.danger{color:var(--danger);border-color:var(--danger-soft)}
+  button.danger.armed{background:var(--danger);color:#fff}
+  button:disabled{opacity:.5;cursor:default}
+  .big{width:100%;padding:18px;font-size:18px;border-radius:16px}
+  .row{display:flex;gap:10px;align-items:center}
+  .row>*{flex:1}
+  .stack>*+*{margin-top:10px}
+  input,select,textarea{font:inherit;width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+    background:var(--bg);color:var(--ink);min-height:44px}
+  textarea{min-height:70px;resize:vertical}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  .muted{color:var(--muted);font-size:14px}
+  .hidden{display:none !important}
+  #fileInput{display:none}
+  .videoWrap{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:1/1;max-height:60vh;margin-bottom:10px}
+  .videoWrap video{width:100%;height:100%;object-fit:cover}
+  .videoWrap .frame{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.85);border-radius:16px}
+  /* list */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+  .stat span{font-size:12px;color:var(--muted)}
+  .chips{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+  .chip{min-height:34px;padding:6px 12px;border-radius:999px;font-size:14px}
+  .chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .list{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer}
+  .item:last-child{border-bottom:0}
+  .item .meta{flex:1;min-width:0}
+  .item .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qty{font-variant-numeric:tabular-nums;font-weight:700;font-size:18px;min-width:44px;text-align:right}
+  .low .qty{color:var(--warn)}
+  .tag{font-size:11px;padding:2px 7px;border-radius:999px;background:var(--warn-soft);color:var(--warn);margin-left:6px;font-weight:600}
+  .empty{padding:28px 16px;text-align:center;color:var(--muted)}
+  /* labels grid */
+  .labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .label{background:#fff;color:#111;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;cursor:pointer}
+  .label svg{width:100%;height:auto;display:block}
+  .label .ln{font-size:13px;font-weight:600;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .label .lc{font-size:11px;color:#555;font-family:ui-monospace,Menlo,monospace}
+  /* bottom nav */
+  nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+    display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+  nav button{flex:1;max-width:240px;border:0;border-radius:0;background:none;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);padding:8px 0 10px}
+  nav button svg{width:24px;height:24px}
+  nav button.on{color:var(--accent);font-weight:600}
+  /* sheet / modal */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:none;align-items:flex-end;justify-content:center}
+  .backdrop.open{display:flex}
+  .sheet{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;
+    padding:18px 18px calc(18px + env(safe-area-inset-bottom))}
+  @media (min-width:700px){.backdrop{align-items:center}.sheet{border-radius:20px}}
+  .sheet h3{margin:0;font-size:22px;word-break:break-word}
+  .code{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--muted);word-break:break-all}
+  .counter{display:flex;align-items:center;justify-content:center;gap:18px;margin:18px 0 8px}
+  .counter button{width:64px;height:64px;border-radius:50%;font-size:30px;padding:0}
+  .counter .n{font-size:48px;font-weight:700;min-width:110px;text-align:center;font-variant-numeric:tabular-nums}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;margin:14px 0}
+  .kv dt{color:var(--muted)} .kv dd{margin:0;word-break:break-word}
+  .hist{font-size:13px;color:var(--muted);border-top:1px solid var(--line);margin-top:12px;padding-top:8px}
+  .hist div{display:flex;justify-content:space-between;padding:3px 0}
+  .plus{color:var(--accent)} .minus{color:var(--danger)}
+  .qrbox{background:#fff;border-radius:12px;padding:12px;max-width:240px;margin:12px auto}
+  .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:20;
+    max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>QR Inventory</h1>
+  <span id="modePill" class="pill">Loading…</span>
+</header>
+
+<main>
+  <!-- SCAN -->
+  <section id="view-scan" class="view active">
+    <div class="card stack">
+      <div id="videoWrap" class="videoWrap hidden">
+        <video id="video" playsinline muted></video><div class="frame"></div>
+      </div>
+      <button id="liveBtn" class="primary big hidden">Start live camera</button>
+      <button id="photoBtn" class="primary big">📷 Scan a QR code</button>
+      <input id="fileInput" type="file" accept="image/*" capture="environment">
+      <p class="muted" id="scanHint" style="margin:6px 0 0">Point your camera at the code and take a photo. It reads QR codes, and most product barcodes too on Android.</p>
+    </div>
+    <div class="card">
+      <h2>Type a code</h2>
+      <form id="manualForm" class="row">
+        <input id="manualInput" placeholder="Code or handheld-scanner input" autocomplete="off" autocapitalize="characters">
+        <button class="primary" style="flex:0 0 auto">Look up</button>
+      </form>
+      <p class="muted" style="margin:8px 0 0">Bluetooth or USB scanners type into this box, so they work too.</p>
+    </div>
+    <div class="card">
+      <h2>Recent activity</h2>
+      <div id="recent" class="muted">Nothing yet.</div>
+    </div>
+  </section>
+
+  <!-- ITEMS -->
+  <section id="view-items" class="view">
+    <div class="stats">
+      <div class="stat"><b id="stItems">0</b><span>items</span></div>
+      <div class="stat"><b id="stUnits">0</b><span>units total</span></div>
+      <div class="stat"><b id="stLow">0</b><span>low stock</span></div>
+    </div>
+    <input id="search" type="search" placeholder="Search name, code, location, category">
+    <div class="chips" id="chips"></div>
+    <div id="list" class="list"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="newItemBtn">+ Add item</button>
+      <button id="csvBtn">Export CSV</button>
+    </div>
+  </section>
+
+  <!-- LABELS -->
+  <section id="view-labels" class="view">
+    <div class="card stack">
+      <h2>Make labels</h2>
+      <p class="muted" style="margin:0">Got something without a code? Create an item and the app gives it a fresh QR code to print and stick on.</p>
+      <button id="genBtn" class="primary">+ New item with QR label</button>
+      <div class="row">
+        <select id="pageSel"></select>
+        <button id="sheetBtn">Save label sheet (PNG)</button>
+      </div>
+      <p class="muted" style="margin:0">Sheets are letter-size, 12 labels per page. Tap any label below to open its item.</p>
+    </div>
+    <div id="labels" class="labels"></div>
+  </section>
+</main>
+
+<nav>
+  <button data-view="scan" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 12h8"/></svg>Scan</button>
+  <button data-view="items"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>Items</button>
+  <button data-view="labels"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/></svg>Labels</button>
+</nav>
+
+<div id="backdrop" class="backdrop"><div id="sheet" class="sheet"></div></div>
+<div id="toast" class="toast"></div>
+<canvas id="work" class="hidden"></canvas>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const now = () => Date.now();
+const fmtTime = t => {
+  const d = new Date(t), diff = (Date.now() - t) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return Math.floor(diff/60) + " min ago";
+  if (diff < 86400) return Math.floor(diff/3600) + " h ago";
+  return d.toLocaleDateString(undefined, {month:"short", day:"numeric"});
+};
+let toastTimer;
+function toast(msg, ms = 2600){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+// Stable document id for any code (QR contents can contain characters a db path can't).
+function idFor(code){
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < code.length; i++){ const ch = code.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  return "i" + (h2>>>0).toString(16).padStart(8,"0") + (h1>>>0).toString(16).padStart(8,"0");
+}
+function newCode(){
+  const A = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; let s = "INV-";
+  const r = crypto.getRandomValues(new Uint8Array(6));
+  for (const b of r) s += A[b % A.length];
+  return s;
+}
+const inClaude = !!(window.claude && typeof window.claude.use === "function");
+
+/* ---------- storage: Claude db when hosted as an artifact, else this browser ---------- */
+const Store = {
+  mode: "loading", items: new Map(), col: null, readOnly: false, onChange: () => {},
+  async init(){
+    if (inClaude){
+      let db = null;
+      try { db = await window.claude.use("db"); } catch(e){ db = null; }
+      if (db){ this.mode = "cloud"; this.col = db.collection("items"); return this.subscribe(); }
+    }
+    this.mode = "local";
+    try { const raw = localStorage.getItem("qrinv.items"); if (raw) for (const it of JSON.parse(raw)) this.items.set(idFor(it.code), it); }
+    catch(e){ toast("This browser can't save data — changes last until you close the page."); }
+    this.onChange();
+  },
+  subscribe(){
+    let first = true;
+    const timer = setTimeout(() => { if (first) toast("Still connecting — your list may be out of date.", 4000); }, 10000);
+    this.col.onSnapshot(snap => {
+      this.items = new Map(snap.docs.map(d => [d.id, d.data()]));
+      if (!snap.metadata.fromCache){ first = false; clearTimeout(timer); }
+      this.onChange();
+    }, err => {
+      clearTimeout(timer); first = false;
+      toast("Couldn't load inventory (" + err.code + ").", 5000); this.onChange();
+    });
+  },
+  persistLocal(){
+    try { localStorage.setItem("qrinv.items", JSON.stringify([...this.items.values()])); } catch(e){}
+  },
+  get(code){ return this.items.get(idFor(code)); },
+  async save(item){
+    const id = idFor(item.code); item = {...item, updatedAt: now()};
+    if (this.mode === "cloud"){
+      this.items.set(id, item);   // optimistic; the live snapshot confirms it
+      try { await this.col.doc(id).set(item); }
+      catch(e){
+        if (e && e.code === "invalid_argument"){ this.readOnly = true; toast("You have view-only access to this inventory."); }
+        else if (e && e.code === "quota_exceeded") toast("Storage is full — delete some items first.", 5000);
+        else toast("Couldn't save — check your connection and try again.");
+        throw e;
+      }
+    } else { this.items.set(id, item); this.persistLocal(); this.onChange(); }
+  },
+  async remove(code){
+    const id = idFor(code);
+    if (this.mode === "cloud") await this.col.doc(id).delete();
+    else { this.items.delete(id); this.persistLocal(); this.onChange(); }
+  }
+};
+
+async function adjust(code, delta, note){
+  const it = Store.get(code); if (!it) return;
+  const qty = Math.max(0, (Number(it.qty) || 0) + delta);
+  const history = [{t: now(), d: qty - (Number(it.qty)||0), q: qty, note: note || ""}, ...(it.history || [])].slice(0, 25);
+  await Store.save({...it, qty, history});
+}
+
+/* ---------- downloads ---------- */
+let downloads = null;
+if (inClaude) window.claude.use("downloads").then(d => { downloads = d; }).catch(() => {});
+async function saveFile(filename, data){
+  if (downloads){
+    try { await downloads.save({filename, data}); return; }
+    catch(e){ if (e && e.code === "declined") return; }
+  }
+  if (!inClaude){
+    const blob = data instanceof Blob ? data : new Blob([data]);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return;
+  }
+  if (typeof data === "string"){
+    try { await navigator.clipboard.writeText(data); toast("Copied to clipboard — paste it into a spreadsheet."); return; } catch(e){}
+  }
+  toast("Saving files isn't available here.");
+}
+
+/* ---------- QR generation ---------- */
+function qrMatrix(text){
+  const q = qrcode(0, "M"); q.addData(text); q.make();
+  const n = q.getModuleCount(); return {n, dark: (r,c) => q.isDark(r,c)};
+}
+function qrSvg(text){
+  const {n, dark} = qrMatrix(text), m = 2; let p = "";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (dark(r,c)) p += `M${c+m} ${r+m}h1v1h-1z`;
+  return `<svg viewBox="0 0 ${n+2*m} ${n+2*m}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${p}" fill="#000"/></svg>`;
+}
+function drawQr(ctx, text, x, y, size){
+  const {n, dark} = qrMatrix(text), cell = Math.floor(size / n), off = Math.floor((size - cell*n)/2);
+  ctx.fillStyle = "#000";
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (dark(r,c)) ctx.fillRect(x+off+c*cell, y+off+r*cell, cell, cell);
+}
+function fitText(ctx, text, maxW){
+  if (ctx.measureText(text).width <= maxW) return text;
+  while (text.length > 1 && ctx.measureText(text + "…").width > maxW) text = text.slice(0, -1);
+  return text + "…";
+}
+function drawLabel(ctx, it, x, y, w, h){
+  ctx.fillStyle = "#fff"; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "#ddd"; ctx.lineWidth = 1; ctx.setLineDash([6,6]); ctx.strokeRect(x+.5, y+.5, w-1, h-1); ctx.setLineDash([]);
+  const qs = Math.min(w, h) * 0.66; drawQr(ctx, it.code, x + (w-qs)/2, y + h*0.06, qs);
+  ctx.fillStyle = "#111"; ctx.textAlign = "center";
+  ctx.font = `600 ${Math.round(h*0.07)}px -apple-system, Helvetica, Arial, sans-serif`;
+  ctx.fillText(fitText(ctx, it.name || "Unnamed", w*0.9), x + w/2, y + h*0.06 + qs + h*0.1);
+  ctx.fillStyle = "#555"; ctx.font = `${Math.round(h*0.05)}px Menlo, monospace`;
+  ctx.fillText(fitText(ctx, it.code, w*0.9), x + w/2, y + h*0.06 + qs + h*0.18);
+}
+function canvasBlob(cv){ return new Promise(res => cv.toBlob(res, "image/png")); }
+async function saveLabel(it){
+  const cv = document.createElement("canvas"); cv.width = 600; cv.height = 640;
+  drawLabel(cv.getContext("2d"), it, 0, 0, 600, 640);
+  await saveFile(`label-${it.code.replace(/[^\w-]+/g,"_").slice(0,40)}.png`, await canvasBlob(cv));
+}
+const PER_PAGE = 12;
+async function saveSheet(page){
+  const items = sortedItems(); const chunk = items.slice(page*PER_PAGE, (page+1)*PER_PAGE);
+  if (!chunk.length){ toast("Add some items first."); return; }
+  const W = 1275, H = 1650, mx = 60, my = 75, cols = 3, rows = 4;   // 8.5×11 in at 150 dpi
+  const cw = (W - 2*mx)/cols, ch = (H - 2*my)/rows;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,W,H);
+  chunk.forEach((it, i) => drawLabel(ctx, it, mx + (i%cols)*cw, my + Math.floor(i/cols)*ch, cw, ch));
+  await saveFile(`labels-page-${page+1}.png`, await canvasBlob(cv));
+}
+
+/* ---------- QR / barcode reading ---------- */
+let detector = null;
+if ("BarcodeDetector" in window){
+  try { detector = new BarcodeDetector({formats: ["qr_code","ean_13","ean_8","upc_a","upc_e","code_128","code_39","data_matrix"]}); } catch(e){}
+}
+async function decodeBitmap(src, w, h){
+  if (detector){ try { const r = await detector.detect(src); if (r.length) return r[0].rawValue; } catch(e){} }
+  const cv = $("#work"), ctx = cv.getContext("2d", {willReadFrequently: true});
+  for (const max of [1400, 900, 600]){
+    const s = Math.min(1, max / Math.max(w, h)); cv.width = Math.round(w*s); cv.height = Math.round(h*s);
+    ctx.drawImage(src, 0, 0, cv.width, cv.height);
+    const img = ctx.getImageData(0, 0, cv.width, cv.height);
+    const res = jsQR(img.data, img.width, img.height, {inversionAttempts: "attemptBoth"});
+    if (res && res.data) return res.data;
+  }
+  return null;
+}
+async function decodeFile(file){
+  let src, w, h;
+  try { src = await createImageBitmap(file); w = src.width; h = src.height; }
+  catch(e){
+    src = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = URL.createObjectURL(file); });
+    w = src.naturalWidth; h = src.naturalHeight;
+  }
+  return decodeBitmap(src, w, h);
+}
+$("#photoBtn").onclick = () => { $("#fileInput").value = ""; $("#fileInput").click(); };
+$("#fileInput").onchange = async e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const label = $("#photoBtn").textContent;
+  $("#photoBtn").disabled = true; $("#photoBtn").textContent = "Reading…";
+  try {
+    const code = await decodeFile(f);
+    if (code) handleCode(code); else toast("No code found — get a little closer and keep it in focus.", 3500);
+  } catch(err){ toast("Couldn't read that photo."); }
+  finally { $("#photoBtn").disabled = false; $("#photoBtn").textContent = label; e.target.value = ""; }
+};
+
+// Live camera: works when you host the file yourself over https (Claude's viewer blocks cameras).
+let stream = null, scanning = false;
+if (!inClaude && navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+  $("#liveBtn").classList.remove("hidden");
+  $("#photoBtn").classList.remove("primary");
+  $("#photoBtn").textContent = "📷 Scan from a photo";
+  $("#scanHint").textContent = "Live camera scans continuously. Use a photo if the camera won't start.";
+}
+$("#liveBtn").onclick = async () => { if (stream) stopLive(); else startLive(); };
+async function startLive(){
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}, audio: false});
+  } catch(e){ toast("Camera blocked — use “Scan from a photo” instead.", 3500); return; }
+  const v = $("#video"); v.srcObject = stream; await v.play();
+  $("#videoWrap").classList.remove("hidden"); $("#liveBtn").textContent = "Stop camera"; scanning = true; loop();
+}
+function stopLive(){
+  scanning = false; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null;
+  $("#videoWrap").classList.add("hidden"); $("#liveBtn").textContent = "Start live camera";
+}
+let lastCode = "", lastAt = 0;
+async function loop(){
+  if (!scanning) return;
+  const v = $("#video");
+  if (v.readyState >= 2 && !$("#backdrop").classList.contains("open")){
+    const code = await decodeBitmap(v, v.videoWidth, v.videoHeight).catch(() => null);
+    if (code && !(code === lastCode && now() - lastAt < 2500)){
+      lastCode = code; lastAt = now(); if (navigator.vibrate) navigator.vibrate(60); handleCode(code);
+    }
+  }
+  setTimeout(loop, 180);
+}
+
+$("#manualForm").onsubmit = e => {
+  e.preventDefault(); const v = $("#manualInput").value.trim(); if (!v) return;
+  $("#manualInput").value = ""; handleCode(v);
+};
+
+function handleCode(raw){
+  const code = String(raw).trim().slice(0, 300); if (!code) return;
+  const it = Store.get(code);
+  if (it) openItem(code); else openForm({code}, true);
+}
+
+/* ---------- sheets (item detail & form) ---------- */
+function openSheet(html){ $("#sheet").innerHTML = html; $("#backdrop").classList.add("open"); }
+function closeSheet(){ $("#backdrop").classList.remove("open"); openCode = null; }
+$("#backdrop").addEventListener("click", e => { if (e.target.id === "backdrop") closeSheet(); });
+let openCode = null;
+
+function openItem(code){
+  const it = Store.get(code); if (!it){ closeSheet(); return; }
+  openCode = code;
+  const low = it.min !== "" && it.min != null && Number(it.qty) <= Number(it.min);
+  const hist = (it.history || []).slice(0, 8).map(h =>
+    `<div><span>${fmtTime(h.t)}${h.note ? " · " + esc(h.note) : ""}</span><span class="${h.d >= 0 ? "plus" : "minus"}">${h.d >= 0 ? "+" : ""}${h.d} → ${h.q}</span></div>`).join("");
+  openSheet(`
+    <div class="row" style="align-items:flex-start">
+      <div><h3>${esc(it.name || "Unnamed item")}${low ? '<span class="tag">LOW</span>' : ""}</h3><div class="code">${esc(it.code)}</div></div>
+      <button data-a="close" style="flex:0 0 auto">✕</button>
+    </div>
+    <div class="counter">
+      <button data-a="dec">−</button><div class="n">${Number(it.qty) || 0}</div><button data-a="inc" class="primary">+</button>
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <input id="amt" type="number" inputmode="numeric" min="1" placeholder="Amount" style="flex:1">
+      <button data-a="take" style="flex:0 0 auto">Remove</button>
+      <button data-a="add" class="primary" style="flex:0 0 auto">Add</button>
+    </div>
+    <dl class="kv">
+      ${it.location ? `<dt>Location</dt><dd>${esc(it.location)}</dd>` : ""}
+      ${it.category ? `<dt>Category</dt><dd>${esc(it.category)}</dd>` : ""}
+      ${it.min !== "" && it.min != null ? `<dt>Low at</dt><dd>${esc(it.min)} or fewer</dd>` : ""}
+      ${it.notes ? `<dt>Notes</dt><dd>${esc(it.notes)}</dd>` : ""}
+      <dt>Updated</dt><dd>${it.updatedAt ? fmtTime(it.updatedAt) : "—"}</dd>
+    </dl>
+    <div class="row"><button data-a="edit">Edit</button><button data-a="qr">QR label</button><button data-a="del" class="danger">Delete</button></div>
+    <div id="qrArea"></div>
+    ${hist ? `<div class="hist"><b style="color:var(--ink)">History</b>${hist}</div>` : ""}
+  `);
+}
+
+$("#sheet").addEventListener("click", async e => {
+  const b = e.target.closest("[data-a]"); if (!b) return;
+  const a = b.dataset.a, code = openCode;
+  if (a === "close") return closeSheet();
+  if (a === "cancel") return code ? openItem(code) : closeSheet();
+  if (!code && a !== "save") return;
+  const amt = () => Math.max(1, parseInt(($("#amt") || {}).value, 10) || 1);
+  try {
+    if (a === "inc") await adjust(code, 1);
+    else if (a === "dec") await adjust(code, -1);
+    else if (a === "add") await adjust(code, amt(), "added");
+    else if (a === "take") await adjust(code, -amt(), "removed");
+    else if (a === "edit") return openForm(Store.get(code), false);
+    else if (a === "qr"){
+      const it = Store.get(code);
+      $("#qrArea").innerHTML = `<div class="qrbox">${qrSvg(it.code)}</div><button data-a="savelabel" class="primary" style="width:100%">Save label image</button>`;
+      return;
+    }
+    else if (a === "savelabel") return saveLabel(Store.get(code));
+    else if (a === "del"){
+      if (!b.classList.contains("armed")){ b.classList.add("armed"); b.textContent = "Tap to confirm"; setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete"; }, 3000); return; }
+      await Store.remove(code); closeSheet(); toast("Deleted."); return;
+    }
+  } catch(err){ /* toast already shown */ }
+  if (a !== "save" && Store.mode === "local") openItem(code);
+});
+
+function openForm(it, isNew){
+  openCode = isNew ? null : it.code;
+  openSheet(`
+    <div class="row" style="align-items:flex-start">
+      <div><h3>${isNew ? "New item" : "Edit item"}</h3>${isNew && it.code ? `<div class="code">Scanned: ${esc(it.code)}</div>` : ""}</div>
+      <button data-a="${isNew ? "close" : "cancel"}" style="flex:0 0 auto">✕</button>
+    </div>
+    <form id="itemForm">
+      <label>Name</label><input name="name" required value="${esc(it.name)}" placeholder="e.g. AA batteries">
+      <div class="row">
+        <div><label>Quantity</label><input name="qty" type="number" inputmode="numeric" min="0" value="${esc(it.qty ?? 1)}"></div>
+        <div><label>Low-stock alert at</label><input name="min" type="number" inputmode="numeric" min="0" value="${esc(it.min ?? "")}" placeholder="optional"></div>
+      </div>
+      <label>Location</label><input name="location" value="${esc(it.location)}" placeholder="e.g. Garage shelf B" list="locList">
+      <label>Category</label><input name="category" value="${esc(it.category)}" placeholder="e.g. Electrical" list="catList">
+      <label>Notes</label><textarea name="notes" placeholder="optional">${esc(it.notes)}</textarea>
+      <label>Code</label><input name="code" value="${esc(it.code)}" ${isNew ? "" : "readonly"} placeholder="Leave blank to generate one">
+      <datalist id="locList">${distinct("location").map(v => `<option value="${esc(v)}">`).join("")}</datalist>
+      <datalist id="catList">${distinct("category").map(v => `<option value="${esc(v)}">`).join("")}</datalist>
+      <button class="primary big" style="margin-top:16px">${isNew ? "Save item" : "Save changes"}</button>
+    </form>
+  `);
+  const f = $("#itemForm");
+  if (isNew) setTimeout(() => f.name.focus(), 50);
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const code = (f.code.value.trim() || newCode()).slice(0, 300);
+    if (isNew && Store.get(code)){ toast("That code is already in use."); return; }
+    const prev = isNew ? null : Store.get(code);
+    const qty = Math.max(0, parseInt(f.qty.value, 10) || 0);
+    let history = prev ? (prev.history || []) : [];
+    if (!prev) history = [{t: now(), d: qty, q: qty, note: "created"}];
+    else if (qty !== Number(prev.qty)) history = [{t: now(), d: qty - Number(prev.qty || 0), q: qty, note: "edited"}, ...history].slice(0, 25);
+    const item = {
+      code, name: f.name.value.trim(), qty,
+      min: f.min.value === "" ? "" : Math.max(0, parseInt(f.min.value, 10) || 0),
+      location: f.location.value.trim(), category: f.category.value.trim(), notes: f.notes.value.trim(),
+      createdAt: prev ? (prev.createdAt || now()) : now(), history
+    };
+    try { await Store.save(item); } catch(err){ return; }
+    toast(isNew ? "Item added." : "Saved.");
+    // In cloud mode the snapshot arrives right after; show the item either way.
+    setTimeout(() => openItem(code), Store.mode === "cloud" ? 150 : 0);
+  };
+}
+
+/* ---------- lists ---------- */
+let filter = "All";
+function distinct(field){
+  return [...new Set([...Store.items.values()].map(i => i[field]).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+}
+function isLow(it){ return it.min !== "" && it.min != null && Number(it.qty) <= Number(it.min); }
+function sortedItems(){ return [...Store.items.values()].sort((a,b) => (a.name||"").localeCompare(b.name||"")); }
+
+function renderItems(){
+  const all = sortedItems();
+  $("#stItems").textContent = all.length;
+  $("#stUnits").textContent = all.reduce((s,i) => s + (Number(i.qty)||0), 0);
+  $("#stLow").textContent = all.filter(isLow).length;
+  const chips = ["All", "Low stock", ...distinct("category")];
+  if (!chips.includes(filter)) filter = "All";
+  $("#chips").innerHTML = chips.map(c => `<button class="chip ${c === filter ? "on" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
+  const q = $("#search").value.trim().toLowerCase();
+  const shown = all.filter(i =>
+    (filter === "All" || (filter === "Low stock" ? isLow(i) : i.category === filter)) &&
+    (!q || [i.name, i.code, i.location, i.category, i.notes].some(v => String(v||"").toLowerCase().includes(q))));
+  $("#list").innerHTML = shown.length ? shown.map(i => `
+    <div class="item ${isLow(i) ? "low" : ""}" data-code="${esc(i.code)}">
+      <div class="meta"><div class="name">${esc(i.name || "Unnamed")}${isLow(i) ? '<span class="tag">LOW</span>' : ""}</div>
+      <div class="sub">${esc([i.location, i.category].filter(Boolean).join(" · ") || i.code)}</div></div>
+      <div class="qty">${Number(i.qty)||0}</div>
+    </div>`).join("")
+    : `<div class="empty">${all.length ? "No matches." : "No items yet. Scan a code or tap “Add item” to start."}</div>`;
+}
+$("#chips").onclick = e => { const c = e.target.closest("[data-c]"); if (c){ filter = c.dataset.c; renderItems(); } };
+$("#search").oninput = renderItems;
+$("#list").onclick = e => { const r = e.target.closest("[data-code]"); if (r) openItem(r.dataset.code); };
+$("#newItemBtn").onclick = () => openForm({code: ""}, true);
+$("#genBtn").onclick = () => openForm({code: newCode()}, true);
+
+function renderLabels(){
+  const all = sortedItems();
+  $("#labels").innerHTML = all.length ? all.map(i => `
+    <div class="label" data-code="${esc(i.code)}">${qrSvg(i.code)}<div class="ln">${esc(i.name || "Unnamed")}</div><div class="lc">${esc(i.code)}</div></div>`).join("")
+    : `<div class="empty" style="grid-column:1/-1">Labels for your items show up here.</div>`;
+  const pages = Math.max(1, Math.ceil(all.length / PER_PAGE)), cur = $("#pageSel").value;
+  $("#pageSel").innerHTML = Array.from({length: pages}, (_, p) =>
+    `<option value="${p}">Page ${p+1} of ${pages}</option>`).join("");
+  if (cur && +cur < pages) $("#pageSel").value = cur;
+}
+$("#labels").onclick = e => { const r = e.target.closest("[data-code]"); if (r) openItem(r.dataset.code); };
+$("#sheetBtn").onclick = () => saveSheet(+$("#pageSel").value || 0);
+
+function renderRecent(){
+  const ev = [];
+  for (const it of Store.items.values()) for (const h of (it.history || [])) ev.push({...h, name: it.name, code: it.code});
+  ev.sort((a,b) => b.t - a.t);
+  $("#recent").innerHTML = ev.length ? `<div class="list" style="border:0">` + ev.slice(0, 6).map(h => `
+    <div class="item" data-code="${esc(h.code)}" style="padding:10px 0">
+      <div class="meta"><div class="name">${esc(h.name || h.code)}</div><div class="sub">${fmtTime(h.t)}${h.note ? " · " + esc(h.note) : ""}</div></div>
+      <div class="qty ${h.d >= 0 ? "plus" : "minus"}" style="font-size:15px">${h.d >= 0 ? "+" : ""}${h.d}</div>
+    </div>`).join("") + `</div>` : "Nothing yet.";
+}
+$("#recent").onclick = e => { const r = e.target.closest("[data-code]"); if (r) openItem(r.dataset.code); };
+
+function toCsv(){
+  const cols = ["code","name","qty","min","location","category","notes","updatedAt"];
+  const cell = v => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+  return [cols.join(","), ...sortedItems().map(i => cols.map(c =>
+    cell(c === "updatedAt" && i[c] ? new Date(i[c]).toISOString() : i[c])).join(","))].join("\n");
+}
+$("#csvBtn").onclick = () => saveFile(`inventory-${new Date().toISOString().slice(0,10)}.csv`, toCsv());
+
+/* ---------- nav & boot ---------- */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + b.dataset.view));
+  if (b.dataset.view !== "scan" && stream) stopLive();
+});
+
+Store.onChange = () => {
+  const pill = $("#modePill");
+  pill.textContent = Store.mode === "cloud" ? "Synced to your account" : "Saved on this device";
+  pill.classList.toggle("local", Store.mode !== "cloud");
+  renderItems(); renderLabels(); renderRecent();
+  if (openCode && $("#backdrop").classList.contains("open") && !$("#itemForm")) openItem(openCode);
+};
+Store.init();
+})();
+</script>
+</body>
+</html>
